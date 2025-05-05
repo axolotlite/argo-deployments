@@ -17,7 +17,11 @@ wireguard:
     saveConfig: false
   peers: 
     - publicKey: ""
-      allowedIPs: "10.100.0.5/32"
+      allowedIPs: ""
+    - publicKey: ""
+      allowedIPs: ""
+    - publicKey: ""
+      allowedIPs: ""
   resources:
     requests:
       cpu: 100m
