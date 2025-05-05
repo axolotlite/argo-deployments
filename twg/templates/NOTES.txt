@@ -1,0 +1,8 @@
+# templates/NOTES.txt
+WireGuard Installation Complete!
+
+1. Get WireGuard Public Key:
+   kubectl logs -l app.kubernetes.io/name={{ include "wireguard.name" . }} | grep 'Public Key:'
+
+2. Get Tunnel Secret:
+   kubectl get secret {{ include "wireguard.fullname" . }}-tunnel-secret -o jsonpath='{.data.secret-key}' | base64 -d

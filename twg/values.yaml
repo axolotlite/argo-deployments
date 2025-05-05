@@ -1,0 +1,51 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+hostNetwork: true
+nodeSelector: 
+  type: cloud
+
+wireguard:
+  config:
+    address: "10.100.0.1/24"
+    privateKey: ""
+    cidr: "10.100.0.0/24"
+    interfaceName: wg0
+    listenPort: 51821
+    saveConfig: false
+  peers:
+    # - publicKey: ""
+    #   allowedIPs: "10.100.0.5/32"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  securityContext:
+    privileged: true
+    capabilities:
+      add:
+        - NET_ADMIN
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 30
+  service:
+    enabled: false
+    type: ClusterIP
+    port: 51821
+    name: wireguard
+
+tunnel:
+  enabled: true
+  image:
+    repository: ghcr.io/erebe/wstunnel
+    tag: v10.1.9
+  bindPort: 51921
+  logLevel: INFO
+  secret: ""
+  bindAddress: 0.0.0.0

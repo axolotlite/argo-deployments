@@ -1,0 +1,40 @@
+{{- if .Values.tunnel.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wireguard.fullname" . }}-wstunnel
+spec:
+  replicas: 1
+  selector:
+    matchLabels: 
+    {{- include "wstunnel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{ include "wstunnel.selectorLabels" . | nindent 8 }}
+    spec:
+      hostNetwork: {{ .Values.hostNetwork }}
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
+      containers:
+      - name: wstunnel
+        image: "ghcr.io/erebe/wstunnel:v10.1.9"
+        env:
+          - name: RUST_LOG
+            value: {{ .Values.tunnel.logLevel }}
+          - name: TUNNEL_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "wireguard.fullname" . }}-tunnel-secret
+                key: secret-key
+        command:
+          - /bin/sh
+          - -c
+          - |
+            exec /home/app/wstunnel server \
+              --restrict-http-upgrade-path-prefix $TUNNEL_SECRET \
+              --restrict-to 127.0.0.1:{{ .Values.wireguard.config.listenPort }} \
+              wss://{{ .Values.tunnel.bindAddress }}:{{ .Values.tunnel.bindPort }}
+        ports:
+          - containerPort: {{ .Values.tunnel.bindPort }}
+            protocol: TCP
+            name: wstunnel
+{{- end }}

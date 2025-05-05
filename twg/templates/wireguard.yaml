@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wireguard.fullname" . }}-wireguard
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {{ include "wireguard.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{ include "wireguard.selectorLabels" . | nindent 8 }}
+    spec:
+      hostNetwork: {{ .Values.hostNetwork }}
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
+      containers:
+        - name: wireguard
+          image: "masipcat/wireguard-go:latest"
+          command:
+            - sh
+            - -c
+            - |
+              pubkey=$(wg pubkey < /etc/wireguard/privatekey)
+              echo "Public Key: $pubkey"
+              /entrypoint.sh
+          ports:
+            - containerPort: {{ .Values.wireguard.config.listenPort }}
+              protocol: UDP
+          securityContext:
+            privileged: {{ .Values.wireguard.securityContext.privileged }}
+            capabilities:
+              add: 
+                {{- toYaml .Values.wireguard.securityContext.capabilities.add | nindent 16 }}
+          resources:
+            {{- toYaml .Values.wireguard.resources | nindent 12 }}
+          volumeMounts:
+            - name: cfg
+              mountPath: /etc/wireguard/wg0.conf
+              subPath: wg0.conf
+            - name: secret
+              mountPath: /etc/wireguard/privatekey
+              subPath: privatekey
+          {{- if .Values.wireguard.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command: ["wg", "show"]
+            initialDelaySeconds: {{ .Values.wireguard.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.wireguard.livenessProbe.periodSeconds }}
+          {{- end }}
+      volumes:
+        - name: cfg
+          configMap:
+            name: {{ include "wireguard.fullname" . }}-config
+        - name: secret
+          secret:
+            secretName: {{ include "wireguard.fullname" . }}-secret

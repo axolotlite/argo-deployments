@@ -1,0 +1,15 @@
+{{- if .Values.wireguard.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wireguard.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: wg
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.wireguard.config.listenPort }}
+      protocol: UDP
+  selector:
+    app: {{ include "wireguard.fullname" . }}-wireguard
+{{- end }}
