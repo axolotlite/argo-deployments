@@ -15,9 +15,9 @@ wireguard:
     interfaceName: wg0
     listenPort: 51821
     saveConfig: false
-  peers: []
-    # - publicKey: ""
-    #   allowedIPs: "10.100.0.5/32"
+  peers: 
+    - publicKey: ""
+      allowedIPs: "10.100.0.5/32"
   resources:
     requests:
       cpu: 100m
