@@ -1,77 +1,68 @@
-name: Publish images
-
+name: Create and Publish Release
 on:
   push:
-    branches:
-      - main
+    tags:
+      - '*/v*'
 
 jobs:
-  discover-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.find-changes.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Find changed projects with Dockerfiles
-        id: find-changes
-        run: |
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          echo "Files changed in this push:"
-          echo "$CHANGED_FILES"
-          echo "-------------------------------------------"
-          PROJECTS_TO_BUILD=()
-          for dir in */; do
-            dir_name=${dir%/}
-            if [ -f "${dir_name}/Dockerfile" ]; then
-              echo "Project '$dir_name' contains a Dockerfile. Checking for changes..."
-              if echo "$CHANGED_FILES" | grep -q "^${dir_name}/"; then
-                echo "-> Changes detected in '$dir_name'. Adding to build matrix."
-                PROJECTS_TO_BUILD+=("\"${dir_name}\"")
-              else
-                echo "-> No changes detected in '$dir_name'."
-              fi
-            fi
-          done
-          MATRIX="[$(IFS=,; echo "${PROJECTS_TO_BUILD[*]}")]"
-          echo "-------------------------------------------"
-          echo "Final build matrix: $MATRIX"
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-
-  build-and-push:
-    needs: discover-changes
-    if: ${{ needs.discover-changes.outputs.matrix != '[]' }}
+  build-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ${{ fromJson(needs.discover-changes.outputs.matrix) }}
+      packages: write # Required to push container images to GHCR
+
     steps:
+      # Step 1: Check out the repository code at the specific tag.
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Step 2: Parse the project name and version from the Git tag.
+      # This is the core of the generalization.
+      - name: Parse Project Name and Version from Tag
+        id: parse_tag
+        run: |
+          # The full tag (e.g., 'we-quota-checker/v1.0.0') is in the github.ref_name variable
+          FULL_TAG="${{ github.ref_name }}"
+          # Split the string by '/' to get the project name
+          PROJECT_NAME=$(echo $FULL_TAG | cut -d'/' -f1)
+          # Split the string to get the version
+          VERSION=$(echo $FULL_TAG | cut -d'/' -f2)
+          
+          echo "Project Name: $PROJECT_NAME"
+          echo "Version: $VERSION"
+          
+          # Set outputs for later steps to use
+          echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # Step 3: Log in to the GitHub Container Registry (GHCR).
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 4: Extract metadata for Docker (image name and tags).
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.project }}
+          # Image name is built dynamically from the parsed project name
+          images: ghcr.io/${{ github.repository_owner }}/${{ steps.parse_tag.outputs.project_name }}
+          # Create multiple tags based on the Git tag:
           tags: |
-            type=sha,prefix=
+            type=semver,pattern={{version}},value=${{ steps.parse_tag.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.parse_tag.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.parse_tag.outputs.version }}
             type=raw,value=latest,enable=true
-      - name: Build and push Docker image for ${{ matrix.project }}
+
+      # Step 5: Build the image for the specific project and push it with all the generated tags.
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.project }}
+          # Context is the path to the project directory, determined from the tag
+          context: ./${{ steps.parse_tag.outputs.project_name }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
