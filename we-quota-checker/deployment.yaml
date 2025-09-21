@@ -1,0 +1,68 @@
+## Example of the secret the user needs to setup before this
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: we-quota-secret
+#   namespace: monitoring
+# type: Opaque
+# data:
+#   PASSWORD: #replace with base64 of your password
+# configmap.yaml
+# ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   # The name we will use to reference this ConfigMap later
+#   name: we-quota-checker-config
+# data:
+#   # The key-value pair. The key should match the environment variable name.
+#   LANDLINE_NUMBER: "0123456789" # Example of the phone number that you're supposed to put
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: we-quota-check
+  namespace: monitoring
+  labels:
+    release: default
+spec:
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  selector:
+    matchLabels:
+      app: we-quota-checker
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: we-quota-checker
+  namespace: monitoring
+  labels:
+    app: we-quota-checker
+    release: default
+spec:
+  nodeName: talos-hg5-hpu
+  containers:
+  - name: we-quota-checker
+    image: ghcr.io/axolitlite/we-quota-checker:latest
+    ports:
+    - name: metrics
+      containerPort: 2222
+    env:
+    - name: LANDLINE_NUMBER
+      valueFrom:
+        configMapKeyRef:
+          name: we-quota-checker-config
+          key: LANDLINE_NUMBER
+    - name: INTERVAL
+      value: "1h"
+    - name: PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: we-quota-secret
+          key: PASSWORD
